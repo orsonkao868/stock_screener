@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股週線選股系統</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --bg2: #141720;
+    --bg3: #1c2030;
+    --bg4: #242840;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8eaf0;
+    --text2: #8890a8;
+    --text3: #555e78;
+    --accent: #4f9cf9;
+    --accent2: #2d7ce0;
+    --green: #34d399;
+    --green2: #059669;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --teal: #2dd4bf;
+    --font: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
+
+  .app { display: grid; grid-template-rows: 56px 1fr; height: 100vh; }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 24px; gap: 16px;
+    background: var(--bg2);
+  }
+  .logo { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+  .logo span { color: var(--accent); }
+  .header-badge {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px;
+    background: rgba(79,156,249,0.12); color: var(--accent); border: 1px solid rgba(79,156,249,0.2);
+  }
+  .spacer { flex: 1; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); display: inline-block; }
+  .status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green2); }
+  .status-text { font-size: 12px; color: var(--text2); }
+
+  /* LAYOUT */
+  .main { display: grid; grid-template-columns: 300px 1fr; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    overflow-y: auto; background: var(--bg2); padding: 20px 16px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+
+  .section-title {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 10px;
+  }
+
+  .card {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px;
+  }
+  .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .card-icon { font-size: 15px; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+  .pill {
+    font-size: 10px; padding: 2px 7px; border-radius: 20px;
+    font-weight: 600;
+  }
+  .pill-green { background: rgba(52,211,153,0.15); color: var(--green); }
+  .pill-amber { background: rgba(251,191,36,0.15); color: var(--amber); }
+
+  .param { margin-bottom: 10px; }
+  .param-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .param-label { font-size: 12px; color: var(--text2); }
+  .param-val { font-size: 12px; font-weight: 600; color: var(--accent); min-width: 40px; text-align: right; }
+  input[type=range] {
+    width: 100%; height: 3px; appearance: none; background: var(--bg4);
+    border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    appearance: none; width: 14px; height: 14px;
+    border-radius: 50%; background: var(--accent); cursor: pointer;
+    box-shadow: 0 0 8px rgba(79,156,249,0.5);
+  }
+
+  .watchlist-input { display: flex; gap: 6px; margin-bottom: 8px; }
+  .watchlist-input input[type=text] {
+    flex: 1; background: var(--bg4); border: 1px solid var(--border2);
+    color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 13px;
+    outline: none; font-family: var(--font);
+  }
+  .watchlist-input input[type=text]:focus { border-color: var(--accent); }
+  .add-btn {
+    background: var(--accent2); border: none; color: white;
+    padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .add-btn:hover { background: var(--accent); }
+
+  .watch-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .watch-tag {
+    font-size: 12px; padding: 3px 9px; border-radius: 5px;
+    background: var(--bg4); border: 1px solid var(--border2);
+    color: var(--text2); cursor: pointer; display: flex; align-items: center; gap: 5px;
+    transition: border-color 0.15s;
+  }
+  .watch-tag:hover { border-color: var(--red); color: var(--red); }
+  .watch-tag.loading { border-color: var(--accent); color: var(--accent); animation: pulse 1.5s infinite; }
+  .watch-tag.done { border-color: var(--green); color: var(--green); }
+
+  .run-btn {
+    width: 100%; padding: 11px; border-radius: 8px; border: none;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    color: white; font-size: 14px; font-weight: 700; cursor: pointer;
+    letter-spacing: 0.3px; transition: opacity 0.15s; font-family: var(--font);
+  }
+  .run-btn:hover { opacity: 0.9; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .run-btn.running { animation: pulse 1s infinite; }
+
+  /* MAIN CONTENT */
+  .content { overflow-y: auto; padding: 20px 24px; }
+
+  /* METRICS */
+  .metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .metric {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .metric-label { font-size: 11px; color: var(--text3); margin-bottom: 5px; }
+  .metric-val { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; }
+  .metric-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  /* LOG */
+  .log-box {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 20px; font-size: 12px; color: var(--text2);
+    font-family: 'SF Mono', 'Cascadia Code', monospace; min-height: 40px;
+    max-height: 120px; overflow-y: auto;
+  }
+  .log-line { margin-bottom: 2px; }
+  .log-ok { color: var(--green); }
+  .log-err { color: var(--red); }
+  .log-info { color: var(--accent); }
+
+  /* TABLE */
+  .table-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .table-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .sort-btn {
+    font-size: 11px; padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border2);
+    background: none; color: var(--text2); cursor: pointer;
+  }
+  .sort-btn.active { color: var(--accent); border-color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600;
+    color: var(--text3); letter-spacing: 0.05em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+    cursor: pointer; user-select: none;
+  }
+  th:hover { color: var(--text2); }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .stock-code { font-weight: 700; font-size: 13px; color: var(--text); }
+  .stock-name { font-size: 12px; color: var(--text2); margin-top: 1px; }
+  .sector-tag {
+    font-size: 11px; padding: 2px 7px; border-radius: 4px;
+    background: rgba(45,212,191,0.1); color: var(--teal); border: 1px solid rgba(45,212,191,0.2);
+  }
+  .price { font-weight: 700; font-size: 14px; }
+  .change-pos { color: var(--green); font-weight: 600; }
+  .change-neg { color: var(--red); font-weight: 600; }
+
+  .score-cell { display: flex; align-items: center; gap: 8px; }
+  .score-track { flex: 1; height: 4px; background: var(--bg4); border-radius: 2px; overflow: hidden; min-width: 60px; }
+  .score-fill { height: 100%; border-radius: 2px; }
+  .score-num { font-size: 13px; font-weight: 700; min-width: 26px; }
+
+  .bar-checks { display: flex; gap: 4px; }
+  .chk { width: 8px; height: 8px; border-radius: 2px; }
+  .chk-ok { background: var(--green2); }
+  .chk-fail { background: var(--bg4); }
+
+  .detail-btn {
+    font-size: 12px; padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border2);
+    background: none; color: var(--text2); cursor: pointer; font-family: var(--font);
+    transition: all 0.15s;
+  }
+  .detail-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* EMPTY / PLACEHOLDER */
+  .placeholder {
+    text-align: center; padding: 60px 20px; color: var(--text3);
+  }
+  .placeholder-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.4; }
+  .placeholder-text { font-size: 15px; line-height: 1.8; }
+
+  /* MODAL */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center;
+    backdrop-filter: blur(3px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 14px; width: 680px; max-width: 95vw; max-height: 85vh;
+    overflow-y: auto; padding: 24px;
+  }
+  .modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+  .modal-title { font-size: 18px; font-weight: 700; }
+  .modal-sub { font-size: 12px; color: var(--text2); margin-top: 3px; }
+  .close-btn { background: none; border: none; color: var(--text3); font-size: 20px; cursor: pointer; padding: 0 4px; }
+  .close-btn:hover { color: var(--text); }
+
+  .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .modal-metric { background: var(--bg3); border-radius: 8px; padding: 12px; }
+  .modal-metric-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+  .modal-metric-val { font-size: 18px; font-weight: 700; }
+
+  .criteria-list { display: flex; flex-direction: column; gap: 8px; }
+  .criteria-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; }
+  .criteria-row.pass { background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.2); }
+  .criteria-row.fail { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.2); }
+  .criteria-icon { font-size: 16px; }
+  .criteria-label { flex: 1; font-size: 13px; }
+  .criteria-detail { font-size: 12px; color: var(--text2); text-align: right; }
+
+  .mini-chart { width: 100%; height: 160px; margin: 16px 0; }
+  canvas { border-radius: 6px; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .fade-in { animation: fadeIn 0.3s ease forwards; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">週線<span>選股</span>系統</div>
+    <div class="header-badge">TWSE / OTC</div>
+    <div class="spacer"></div>
+    <span class="status-dot" id="status-dot"></span>
+    <span class="status-text" id="status-text">尚未執行</span>
+  </header>
+
+  <div class="main">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <!-- 自選股清單 -->
+      <div>
+        <div class="section-title">⬩ 自選股票池</div>
+        <div class="card">
+          <div class="param-label" style="margin-bottom:8px;font-size:12px">輸入台股代號（.TW 主板 / .TWO 上櫃）</div>
+          <div class="watchlist-input">
+            <input type="text" id="stock-input" placeholder="如 2330 或 2330.TW" onkeydown="if(event.key==='Enter')addStock()">
+            <button class="add-btn" onclick="addStock()">加入</button>
+          </div>
+          <div class="watch-tags" id="watch-tags"></div>
+          <div style="margin-top:8px">
+            <button class="detail-btn" onclick="loadPreset()">載入預設清單（台積電等 10 檔）</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 核心條件 -->
+      <div>
+        <div class="section-title">⬩ 核心條件 — 突破後修正</div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">📈</span>
+            <span class="card-title">突破新高後修正</span>
+            <span class="pill pill-green">啟用</span>
+          </div>
+          <div class="param">
+            <div class="param-row">
+              <span class="param-label">新高回測期（週）</span>
+              <span class="param-val" id="v-lookback">26</span>
+            </div>
+            <input type="range" min="8" max="52" value="26" oninput="document.getElementById('v-lookback').textContent=this.value" id="r-lookback">
+          </div>
+          <div class="param">
+            <div class="param-row">
+              <span class="param-label">修正週數</span>
+              <span class="param-val" id="v-weeks">4</span>
+            </div>
+            <input type="range" min="2" max="8" value="4" oninput="document.getElementById('v-weeks').textContent=this.value" id="r-weeks">
+          </div>
+          <div class="param">
+            <div class="param-row">
+              <span class="param-label">最大修正幅度（%）</span>
+              <span class="param-val" id="v-corr">10</span>
+            </div>
+            <input type="range" min="3" max="25" value="10" oninput="document.getElementById('v-corr').textContent=this.value" id="r-corr">
+          </div>
+        </div>
+      </div>
+
+      <!-- 週線趨勢 -->
+      <div>
+        <div class="section-title">⬩ 週線趨勢</div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">〰</span>
+            <span class="card-title">均線多頭排列</span>
+            <span class="pill pill-green">啟用</span>
+          </div>
+          <div class="param">
+            <div class="param-row">
+              <span class="param-label">短均線（週）</span>
+              <span class="param-val" id="v-mas">10</span>
+            </div>
+            <input type="range" min="5" max="20" value="10" oninput="document.getElementById('v-mas').textContent=this.value" id="r-mas">
+          </div>
+          <div class="param">
+            <div class="param-row">
+              <span class="param-label">長均線（週）</span>
+              <span class="param-val" id="v-mal">30</span>
+            </div>
+            <input type="range" min="20" max="60" value="30" oninput="document.getElementById('v-mal').textContent=this.value" id="r-mal">
+          </div>
+        </div>
+      </div>
+
+      <!-- 成交量條件 -->
+      <div>
+        <div class="section-title">⬩ 成交量條件</div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">突破時放量</span>
+            <span class="pill pill-amber">選用</span>
+          </div>
+          <div class="param">
+            <div class="param-row">
+              <span class="param-label">突破週量 ≥ 均量倍數</span>
+              <span class="param-val" id="v-vb">1.5</span>x
+            </div>
+            <input type="range" min="1.0" max="4.0" step="0.1" value="1.5" oninput="document.getElementById('v-vb').textContent=parseFloat(this.value).toFixed(1)" id="r-vb">
+          </div>
+          <div class="param">
+            <div class="param-row">
+              <span class="param-label">修正縮量 ≤ 均量倍數</span>
+              <span class="param-val" id="v-vs">0.8</span>x
+            </div>
+            <input type="range" min="0.3" max="1.2" step="0.1" value="0.8" oninput="document.getElementById('v-vs').textContent=parseFloat(this.value).toFixed(1)" id="r-vs">
+          </div>
+        </div>
+      </div>
+
+      <button class="run-btn" id="run-btn" onclick="runScreener()">🔍 開始選股</button>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content" id="content">
+      <div class="placeholder">
+        <div class="placeholder-icon">📡</div>
+        <div class="placeholder-text">
+          加入台股代號並設定篩選條件<br>
+          點選「開始選股」即可從 Yahoo Finance<br>拉取真實週線資料進行分析
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────
+let watchlist = [];
+let results = [];
+let sortKey = 'score';
+let sortDir = -1;
+let logs = [];
+
+// ─── Proxy & API ─────────────────────────────────────────────
+// Use allorigins.win as CORS proxy for Yahoo Finance
+const PROXY = 'https://api.allorigins.win/raw?url=';
+
+function yahooUrl(ticker, interval, range) {
+  const base = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${interval}&range=${range}&includePrePost=false`;
+  return PROXY + encodeURIComponent(base);
+}
+
+async function fetchWeekly(ticker) {
+  const url = yahooUrl(ticker, '1wk', '2y');
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const json = await r.json();
+  const result = json?.chart?.result?.[0];
+  if (!result) throw new Error('無資料');
+  
+  const ts = result.timestamp;
+  const q = result.indicators.quote[0];
+  const closes = q.close;
+  const volumes = q.volume;
+  const opens = q.open;
+  const highs = q.high;
+  const lows = q.low;
+  
+  const name = result.meta?.longName || result.meta?.shortName || ticker;
+  const sector = result.meta?.sector || '—';
+  const currency = result.meta?.currency || 'TWD';
+  const currentPrice = result.meta?.regularMarketPrice || closes[closes.length-1];
+  const prevClose = result.meta?.chartPreviousClose || closes[closes.length-2];
+  const changeP = ((currentPrice - prevClose) / prevClose * 100);
+  
+  return { ticker, name, sector, currency, currentPrice, changeP, ts, closes, volumes, opens, highs, lows };
+}
+
+// ─── Watchlist UI ─────────────────────────────────────────────
+function normalizeTicker(input) {
+  input = input.trim().toUpperCase();
+  if (input.endsWith('.TW') || input.endsWith('.TWO')) return input;
+  if (/^\d{4,6}$/.test(input)) return input + '.TW';
+  return input;
+}
+
+function addStock() {
+  const inp = document.getElementById('stock-input');
+  const t = normalizeTicker(inp.value);
+  if (!t || watchlist.includes(t)) { inp.value=''; return; }
+  watchlist.push(t);
+  inp.value = '';
+  renderTags();
+}
+
+function removeStock(t) {
+  watchlist = watchlist.filter(x => x !== t);
+  renderTags();
+}
+
+function renderTags(statuses={}) {
+  const cont = document.getElementById('watch-tags');
+  cont.innerHTML = watchlist.map(t => {
+    const st = statuses[t] || 'idle';
+    const cls = st === 'loading' ? 'loading' : st === 'done' ? 'done' : '';
+    const icon = st === 'done' ? '✓' : st === 'error' ? '✗' : '×';
+    return `<span class="watch-tag ${cls}" onclick="if('${st}'==='idle')removeStock('${t}')">${t} <small>${icon}</small></span>`;
+  }).join('');
+}
+
+function loadPreset() {
+  const preset = ['2330.TW','2454.TW','6669.TW','3034.TW','2382.TW','2317.TW','2308.TW','2881.TW','2891.TW','3711.TW'];
+  watchlist = [...new Set([...watchlist, ...preset])];
+  renderTags();
+}
+
+// ─── Analysis Logic ───────────────────────────────────────────
+function calcMA(arr, n) {
+  return arr.map((_, i) => {
+    if (i < n-1) return null;
+    const slice = arr.slice(i-n+1, i+1).filter(v => v != null);
+    return slice.length ? slice.reduce((a,b)=>a+b,0)/slice.length : null;
+  });
+}
+
+function analyzeStock(data, params) {
+  const { closes, volumes } = data;
+  const n = closes.length;
+  if (n < 30) return null;
+
+  const { lookback, corrWeeks, maxCorr, maShort, maLong, volBreakMult, volShrinkMult } = params;
+
+  // Filter valid closes
+  const validCloses = closes.map(v => v || null);
+  const validVols = volumes.map(v => v || 0);
+
+  // MA on weekly closes
+  const maS = calcMA(validCloses, maShort);
+  const maL = calcMA(validCloses, maLong);
+
+  // Current MA alignment
+  const lastIdx = n - 1;
+  const maAligned = maS[lastIdx] != null && maL[lastIdx] != null && maS[lastIdx] > maL[lastIdx];
+  const maScore = maAligned ? 100 : 0;
+
+  // Find recent highest close within lookback
+  const windowStart = Math.max(0, n - lookback);
+  const windowCloses = validCloses.slice(windowStart);
+  const peakVal = Math.max(...windowCloses.filter(v => v));
+  const peakIdxLocal = windowCloses.lastIndexOf(peakVal);
+  const peakIdx = windowStart + peakIdxLocal;
+
+  // Check: peak must be recent enough (not the last bar)
+  const barsSincePeak = n - 1 - peakIdx;
+  const correctionPct = peakVal > 0 ? (peakVal - validCloses[lastIdx]) / peakVal * 100 : 0;
+
+  // Breakout: did price make a new N-week high at peakIdx?
+  const prePeakStart = Math.max(0, peakIdx - lookback);
+  const prePeakCloses = validCloses.slice(prePeakStart, peakIdx);
+  const prePeakHigh = Math.max(...prePeakCloses.filter(v=>v), 0);
+  const isBreakout = peakVal > prePeakHigh;
+
+  // Correction weeks & amount check
+  const corrOk = barsSincePeak >= 1 && barsSincePeak <= corrWeeks + 2 && correctionPct >= 1 && correctionPct <= maxCorr;
+  const breakoutOk = isBreakout;
+
+  // Volume at breakout week
+  const breakoutVol = validVols[peakIdx] || 0;
+  const avgVolWindow = validVols.slice(Math.max(0, peakIdx-8), peakIdx);
+  const avgVol = avgVolWindow.length ? avgVolWindow.reduce((a,b)=>a+b,0)/avgVolWindow.length : 0;
+  const volBreakOk = avgVol > 0 && (breakoutVol / avgVol) >= volBreakMult;
+
+  // Volume during correction (shrink)
+  const corrVols = validVols.slice(peakIdx+1, n);
+  const avgCorrVol = corrVols.length ? corrVols.reduce((a,b)=>a+b,0)/corrVols.length : 0;
+  const volShrinkOk = avgVol > 0 && avgCorrVol > 0 && (avgCorrVol / avgVol) <= volShrinkMult;
+
+  // Long-term trend: price > MA long
+  const priceAboveMA = validCloses[lastIdx] > (maL[lastIdx] || 0);
+
+  // Upward slope of long MA
+  const maLCurr = maL[lastIdx];
+  const maLPrev = maL[Math.max(0, lastIdx-4)];
+  const maTrend = (maLCurr && maLPrev) ? ((maLCurr - maLPrev) / maLPrev * 100) > 0 : false;
+
+  // Score calculation
+  let score = 0;
+  const checks = {
+    breakout: breakoutOk,
+    correction: corrOk,
+    maAlign: maAligned,
+    priceAboveMA: priceAboveMA,
+    maTrend: maTrend,
+    volBreak: volBreakOk,
+    volShrink: volShrinkOk,
+  };
+
+  if (checks.breakout) score += 20;
+  if (checks.correction) score += 25;
+  if (checks.maAlign) score += 20;
+  if (checks.priceAboveMA) score += 10;
+  if (checks.maTrend) score += 10;
+  if (checks.volBreak) score += 10;
+  if (checks.volShrink) score += 5;
+
+  // Only include if core conditions pass
+  const corePass = checks.breakout && checks.correction && checks.maAlign;
+
+  return {
+    ...data,
+    score,
+    checks,
+    corePass,
+    barsSincePeak,
+    correctionPct: +correctionPct.toFixed(1),
+    peakVal: +peakVal.toFixed(1),
+    breakoutVol: breakoutVol,
+    avgVol: avgVol,
+    volRatio: avgVol > 0 ? +(breakoutVol/avgVol).toFixed(1) : 0,
+    maS: maS[lastIdx],
+    maL: maL[lastIdx],
+    recentCloses: validCloses.slice(-12),
+  };
+}
+
+// ─── Screener Runner ──────────────────────────────────────────
+function log(msg, type='info') {
+  const d = new Date();
+  const t = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`;
+  logs.push({ msg, type, t });
+  renderLog();
+}
+
+function renderLog() {
+  const box = document.getElementById('log-box');
+  if (!box) return;
+  box.innerHTML = logs.slice(-20).map(l =>
+    `<div class="log-line log-${l.type}">[${l.t}] ${l.msg}</div>`
+  ).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+async function runScreener() {
+  if (!watchlist.length) { alert('請先加入股票代號'); return; }
+
+  const params = {
+    lookback: +document.getElementById('r-lookback').value,
+    corrWeeks: +document.getElementById('r-weeks').value,
+    maxCorr: +document.getElementById('r-corr').value,
+    maShort: +document.getElementById('r-mas').value,
+    maLong: +document.getElementById('r-mal').value,
+    volBreakMult: +document.getElementById('r-vb').value,
+    volShrinkMult: +document.getElementById('r-vs').value,
+  };
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true; btn.classList.add('running'); btn.textContent = '⏳ 抓取資料中...';
+  
+  document.getElementById('status-dot').classList.remove('live');
+  document.getElementById('status-text').textContent = '執行中...';
+
+  logs = [];
+  results = [];
+
+  // Build content with log
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:8px">執行日誌</div>
+      <div class="log-box" id="log-box"></div>
+    </div>
+    <div id="result-area"></div>
+  `;
+
+  const statuses = {};
+  const fetchPromises = watchlist.map(async ticker => {
+    statuses[ticker] = 'loading';
+    renderTags(statuses);
+    log(`正在抓取 ${ticker}...`, 'info');
+    try {
+      const data = await fetchWeekly(ticker);
+      const analyzed = analyzeStock(data, params);
+      if (analyzed) {
+        results.push(analyzed);
+        log(`${ticker} ✓  評分 ${analyzed.score}  核心條件: ${analyzed.corePass ? '通過' : '未通過'}`, analyzed.corePass ? 'ok' : 'info');
+      }
+      statuses[ticker] = 'done';
+    } catch(e) {
+      log(`${ticker} 抓取失敗: ${e.message}`, 'err');
+      statuses[ticker] = 'error';
+    }
+    renderTags(statuses);
+  });
+
+  // Fetch with concurrency limit
+  const CONCURRENCY = 3;
+  for (let i = 0; i < fetchPromises.length; i += CONCURRENCY) {
+    await Promise.allSettled(fetchPromises.slice(i, i + CONCURRENCY));
+  }
+
+  log(`完成！共 ${results.length} 檔分析完成，${results.filter(r=>r.corePass).length} 檔符合核心條件`, 'ok');
+
+  btn.disabled = false; btn.classList.remove('running'); btn.textContent = '🔍 重新選股';
+  document.getElementById('status-dot').classList.add('live');
+  document.getElementById('status-text').textContent = `完成 ${results.filter(r=>r.corePass).length} 檔符合`;
+
+  renderResults();
+}
+
+// ─── Results Rendering ────────────────────────────────────────
+function scoreColor(s) {
+  if (s >= 80) return '#34d399';
+  if (s >= 60) return '#fbbf24';
+  return '#f87171';
+}
+
+function sortResults() {
+  results.sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (typeof av === 'boolean') av = av ? 1 : 0;
+    if (typeof bv === 'boolean') bv = bv ? 1 : 0;
+    return (bv - av) * sortDir;
+  });
+}
+
+function renderResults() {
+  sortResults();
+  const passing = results.filter(r => r.corePass);
+  const all = results;
+
+  const area = document.getElementById('result-area');
+  if (!area) return;
+
+  const metricsHtml = `
+    <div class="metrics-row fade-in">
+      <div class="metric">
+        <div class="metric-label">符合核心條件</div>
+        <div class="metric-val" style="color:var(--green)">${passing.length}</div>
+        <div class="metric-sub">共掃描 ${all.length} 檔</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">平均修正幅度</div>
+        <div class="metric-val">${passing.length ? (passing.reduce((a,r)=>a+r.correctionPct,0)/passing.length).toFixed(1) : '—'}%</div>
+        <div class="metric-sub">核心通過股</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">平均評分</div>
+        <div class="metric-val">${all.length ? Math.round(all.reduce((a,r)=>a+r.score,0)/all.length) : '—'}</div>
+        <div class="metric-sub">滿分 100</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">平均量比</div>
+        <div class="metric-val">${passing.length ? (passing.reduce((a,r)=>a+r.volRatio,0)/passing.length).toFixed(1) : '—'}x</div>
+        <div class="metric-sub">突破週量比</div>
+      </div>
+    </div>
+  `;
+
+  const rows = all.map(r => {
+    const chkKeys = ['breakout','correction','maAlign','priceAboveMA','maTrend','volBreak','volShrink'];
+    const chkHtml = chkKeys.map(k => `<span class="chk ${r.checks[k]?'chk-ok':'chk-fail'}" title="${k}"></span>`).join('');
+    const sc = scoreColor(r.score);
+    const passStyle = r.corePass ? '' : 'opacity:0.5';
+    return `
+      <tr style="${passStyle}">
+        <td>
+          <div class="stock-code">${r.ticker}</div>
+          <div class="stock-name">${r.name}</div>
+        </td>
+        <td><span class="sector-tag">${r.sector || '—'}</span></td>
+        <td class="price">${r.currentPrice?.toFixed(1) || '—'}</td>
+        <td class="${r.changeP >= 0 ? 'change-pos' : 'change-neg'}">${r.changeP >= 0 ? '+' : ''}${r.changeP?.toFixed(2) || '—'}%</td>
+        <td style="color:${r.correctionPct<=8?'var(--green)':'var(--amber)'}">-${r.correctionPct}%</td>
+        <td>${r.barsSincePeak}週</td>
+        <td>${r.volRatio}x</td>
+        <td>
+          <div class="bar-checks">${chkHtml}</div>
+        </td>
+        <td>
+          <div class="score-cell">
+            <div class="score-track"><div class="score-fill" style="width:${r.score}%;background:${sc}"></div></div>
+            <span class="score-num" style="color:${sc}">${r.score}</span>
+          </div>
+        </td>
+        <td><button class="detail-btn" onclick='showDetail(${JSON.stringify(r).replace(/'/g,"&#39;")})'>詳情</button></td>
+      </tr>
+    `;
+  }).join('');
+
+  area.innerHTML = metricsHtml + `
+    <div class="table-header fade-in">
+      <div class="table-title">選股結果（${all.length} 檔）</div>
+      <div style="display:flex;gap:6px">
+        <button class="sort-btn ${sortKey==='score'?'active':''}" onclick="setSortKey('score')">評分排序</button>
+        <button class="sort-btn ${sortKey==='correctionPct'?'active':''}" onclick="setSortKey('correctionPct')">修正幅度</button>
+        <button class="sort-btn ${sortKey==='volRatio'?'active':''}" onclick="setSortKey('volRatio')">量比</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto" class="fade-in">
+      <table>
+        <thead>
+          <tr>
+            <th>代號 / 名稱</th>
+            <th>類別</th>
+            <th>股價</th>
+            <th>漲跌%</th>
+            <th>修正幅度</th>
+            <th>突破後週數</th>
+            <th>突破量比</th>
+            <th style="min-width:90px">條件達成</th>
+            <th style="min-width:110px">評分</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--text3)">
+      ⬤ 條件達成欄位依序：突破新高 / 修正合格 / 均線多頭 / 價格站上長均 / 均線向上 / 突破放量 / 修正縮量
+    </div>
+  `;
+}
+
+function setSortKey(k) {
+  if (sortKey === k) sortDir *= -1;
+  else { sortKey = k; sortDir = -1; }
+  renderResults();
+}
+
+// ─── Detail Modal ─────────────────────────────────────────────
+function showDetail(r) {
+  const chkRows = [
+    { key:'breakout', label:'突破前期高點', detail: r.checks.breakout ? `新高 ${r.peakVal}` : '未達新高' },
+    { key:'correction', label:`修正 ${r.barsSincePeak} 週 / ${r.correctionPct}%`, detail: r.checks.correction ? '✓ 在設定範圍內' : '✗ 超出範圍或週數不符' },
+    { key:'maAlign', label:'週線均線多頭排列', detail: r.checks.maAlign ? `MA短>${r.maS?.toFixed(0)} > MA長${r.maL?.toFixed(0)}` : '均線空頭' },
+    { key:'priceAboveMA', label:'股價站上長均線', detail: r.checks.priceAboveMA ? '✓' : '✗' },
+    { key:'maTrend', label:'長均線向上斜率', detail: r.checks.maTrend ? '✓ 趨勢向上' : '✗ 趨勢偏平或向下' },
+    { key:'volBreak', label:`突破量比 ${r.volRatio}x`, detail: r.checks.volBreak ? '✓ 放量突破' : '✗ 量能不足' },
+    { key:'volShrink', label:'修正期縮量', detail: r.checks.volShrink ? '✓ 縮量整理' : '✗ 量未縮' },
+  ];
+
+  const criteria = chkRows.map(c => `
+    <div class="criteria-row ${r.checks[c.key]?'pass':'fail'}">
+      <span class="criteria-icon">${r.checks[c.key]?'✅':'❌'}</span>
+      <span class="criteria-label">${c.label}</span>
+      <span class="criteria-detail">${c.detail}</span>
+    </div>
+  `).join('');
+
+  // Mini sparkline canvas
+  const canvasId = 'spark-' + Date.now();
+
+  document.getElementById('modal-body').innerHTML = `
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">${r.ticker} ${r.name}</div>
+        <div class="modal-sub">${r.sector || ''} ｜ 評分 ${r.score}/100</div>
+      </div>
+      <button class="close-btn" onclick="closeModal()">×</button>
+    </div>
+
+    <div class="modal-grid">
+      <div class="modal-metric">
+        <div class="modal-metric-label">當前股價</div>
+        <div class="modal-metric-val">$${r.currentPrice?.toFixed(1) || '—'}</div>
+      </div>
+      <div class="modal-metric">
+        <div class="modal-metric-label">突破後修正幅度</div>
+        <div class="modal-metric-val" style="color:var(--amber)">-${r.correctionPct}%</div>
+      </div>
+      <div class="modal-metric">
+        <div class="modal-metric-label">距突破高點週數</div>
+        <div class="modal-metric-val">${r.barsSincePeak} 週</div>
+      </div>
+      <div class="modal-metric">
+        <div class="modal-metric-label">突破週量比</div>
+        <div class="modal-metric-val" style="color:${r.checks.volBreak?'var(--green)':'var(--red)'}">${r.volRatio}x</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">近 12 週收盤走勢</div>
+      <div style="position:relative;height:100px;background:var(--bg3);border-radius:8px;overflow:hidden">
+        <canvas id="${canvasId}" style="width:100%;height:100px"></canvas>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">條件達成明細</div>
+      <div class="criteria-list">${criteria}</div>
+    </div>
+  `;
+
+  document.getElementById('modal').classList.add('open');
+
+  // Draw mini sparkline
+  setTimeout(() => {
+    const cvs = document.getElementById(canvasId);
+    if (!cvs) return;
+    const rect = cvs.parentElement.getBoundingClientRect();
+    cvs.width = rect.width * devicePixelRatio;
+    cvs.height = 100 * devicePixelRatio;
+    cvs.style.width = rect.width + 'px';
+    cvs.style.height = '100px';
+    const ctx = cvs.getContext('2d');
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+
+    const pts = (r.recentCloses || []).filter(v => v != null);
+    if (pts.length < 2) return;
+    const mn = Math.min(...pts);
+    const mx = Math.max(...pts);
+    const W = rect.width, H = 100;
+    const pad = 10;
+    const scaleX = (W - pad*2) / (pts.length - 1);
+    const scaleY = (H - pad*2) / (mx - mn || 1);
+    const x = i => pad + i * scaleX;
+    const y = v => H - pad - (v - mn) * scaleY;
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, 'rgba(79,156,249,0.3)');
+    grad.addColorStop(1, 'rgba(79,156,249,0.02)');
+    ctx.beginPath();
+    ctx.moveTo(x(0), y(pts[0]));
+    pts.forEach((v, i) => { if(i>0) ctx.lineTo(x(i), y(v)); });
+    ctx.lineTo(x(pts.length-1), H);
+    ctx.lineTo(x(0), H);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.moveTo(x(0), y(pts[0]));
+    pts.forEach((v, i) => { if(i>0) ctx.lineTo(x(i), y(v)); });
+    ctx.strokeStyle = '#4f9cf9';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // Peak marker (highest point)
+    const peakI = pts.indexOf(Math.max(...pts));
+    ctx.beginPath();
+    ctx.arc(x(peakI), y(pts[peakI]), 4, 0, Math.PI*2);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fill();
+  }, 50);
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+// ─── Init ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Allow pressing Enter in input
+  document.getElementById('stock-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addStock();
+  });
+});
+</script>
+</body>
+</html>
