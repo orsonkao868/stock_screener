@@ -1,1 +1,1 @@
-https://orsonkao868.github.io/stock_screener
+https://orsonkao868.github.io/stock_screener/
